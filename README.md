@@ -58,8 +58,10 @@ stores them:
 ```
 
 - Rows are matched on `id`, so uploading again updates rather than duplicates.
-- `Skipped` rows are ignored: they are the skill's memory of jobs the user did
-  not want, not part of their pipeline.
+- `Skipped` rows stay off the board: they are the skill's memory of jobs the user did
+  not want. Their recruiters are still added to the directory, since a job skipped
+  for its location or pay says nothing against whoever posted it. Rows skipped as
+  spam share nobody.
 - An upload never moves an application backwards, and never touches the user's
   own notes.
 - Contacts go into the shared directory unless `shareContacts` is `false`.

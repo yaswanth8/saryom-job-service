@@ -34,5 +34,7 @@ public record TrackerRow(
         String appliedAt,
         String followUpAt,
         String appliedBy,
-        String userNote) {
+        String userNote,
+        /** Why a Skipped row was skipped, e.g. "Location" or "Spam / duplicate". */
+        String category) {
 }

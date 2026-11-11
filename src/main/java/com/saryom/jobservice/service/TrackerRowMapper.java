@@ -38,6 +38,19 @@ final class TrackerRowMapper {
         return "skipped".equalsIgnoreCase(Text.clean(row.status()));
     }
 
+    /**
+     * Whether a skipped row's recruiter still belongs in the shared directory.
+     *
+     * <p>A job is skipped because it did not suit this user: the wrong state, too
+     * senior, a pay floor. None of that says anything about the recruiter, who
+     * may be exactly who the next user is looking for. The one exception is a
+     * row skipped as spam, where the poster is the problem.
+     */
+    static boolean hasShareableRecruiter(TrackerRow row) {
+        String category = Text.clean(row.category());
+        return category == null || !category.toLowerCase(java.util.Locale.ROOT).startsWith("spam");
+    }
+
     static boolean isTrackable(TrackerRow row) {
         return Text.clean(row.id()) != null && value(row.company(), 200) != null
                 && value(row.role(), 200) != null;

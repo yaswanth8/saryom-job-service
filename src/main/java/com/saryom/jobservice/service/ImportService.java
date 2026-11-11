@@ -57,6 +57,7 @@ public class ImportService {
 
         int ignored = 0;
         int invalid = 0;
+        int shared = 0;
         // The last occurrence of an id wins, as it would if they arrived in turn.
         Map<String, TrackerRow> rows = new LinkedHashMap<>();
         for (TrackerRow row : request.jobs()) {
@@ -64,6 +65,12 @@ public class ImportService {
                 invalid++;
             } else if (TrackerRowMapper.isSkipped(row)) {
                 ignored++;
+                // The job stays off the board, but whoever posted it is still a
+                // recruiter worth knowing about, unless the row was spam.
+                if (request.sharesContacts() && TrackerRowMapper.hasShareableRecruiter(row)
+                        && share(uid, row, today)) {
+                    shared++;
+                }
             } else {
                 rows.put(row.id().trim(), row);
             }
@@ -75,7 +82,6 @@ public class ImportService {
 
         int created = 0;
         int updated = 0;
-        int shared = 0;
         for (var entry : rows.entrySet()) {
             TrackerRow row = entry.getValue();
             var posting = TrackerRowMapper.posting(row);
@@ -111,10 +117,7 @@ public class ImportService {
             application.advanceTo(status, today, now);
             applications.save(application);
 
-            if (request.sharesContacts() && contact.name() != null
-                    && recruiters.share(uid, contact, posting.role(),
-                            ApplicationService.firmOf(posting.vendor(), posting.company()),
-                            posting.location(), foundOn == null ? today : foundOn) != null) {
+            if (request.sharesContacts() && share(uid, row, today)) {
                 shared++;
             }
         }
@@ -123,5 +126,18 @@ public class ImportService {
             tokens.markUsed(tokenId, uid);
         }
         return new ImportResponse(request.jobs().size(), created, updated, ignored, invalid, shared);
+    }
+
+    /** Adds the row's contact, if it has one, to the shared directory. */
+    private boolean share(String uid, TrackerRow row, LocalDate today) {
+        Contact contact = TrackerRowMapper.contact(row);
+        if (contact.name() == null) {
+            return false;
+        }
+        var posting = TrackerRowMapper.posting(row);
+        LocalDate foundOn = TrackerRowMapper.date(row.foundAt());
+        return recruiters.share(uid, contact, posting.role(),
+                ApplicationService.firmOf(posting.vendor(), posting.company()),
+                posting.location(), foundOn == null ? today : foundOn) != null;
     }
 }
