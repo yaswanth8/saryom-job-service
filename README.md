@@ -104,3 +104,12 @@ Render, Docker, free plan. Environment:
 | `DB_PASSWORD` | the role's password |
 | `FIREBASE_SERVICE_ACCOUNT_JSON` | same service account as the other services |
 | `SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE` | `3` |
+
+### Free-plan limits worth knowing
+
+- **Supabase pauses a free project after about a week of too little database
+  activity.** `.github/workflows/keepalive.yml` reads the public directory
+  summary once a day to prevent that. If the project is ever paused anyway,
+  restore it from the Supabase dashboard; the service reconnects on its own.
+- The session pooler has a small number of slots, which is why the connection
+  pool is capped at 3.
