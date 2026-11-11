@@ -109,7 +109,7 @@ class ImportServiceTest {
     void skippedAndUntrackableRowsAreCountedNotStored() {
         var skipped = TrackerRowMapperTest.row("Skipped", "");
         var noCompany = new TrackerRow("li-9", null, null, "Dev", null, null, null, null, null, null, null,
-                null, "Applied", null, null, null, null, null, null, null, null, null, null, null);
+                null, "Applied", null, null, null, null, null, null, null, null, null, null, null, null);
 
         ImportResponse result = service.upload("alice", null,
                 new ImportRequest(List.of(skipped, noCompany), null));
@@ -118,6 +118,37 @@ class ImportServiceTest {
         assertThat(result.invalid()).isEqualTo(1);
         assertThat(result.created()).isZero();
         verify(applications, never()).save(any());
+    }
+
+    // A job skipped for its location says nothing against whoever posted it.
+    @Test
+    void aSkippedJobStaysOffTheBoardButItsRecruiterIsShared() {
+        ImportResponse result = service.upload("alice", null,
+                new ImportRequest(List.of(TrackerRowMapperTest.row("Skipped", "", "Location")), null));
+
+        assertThat(result.ignored()).isEqualTo(1);
+        assertThat(result.created()).isZero();
+        assertThat(result.recruitersShared()).isEqualTo(1);
+        verify(applications, never()).save(any());
+        verify(recruiters).share(eq("alice"), any(), eq("Java Developer"), eq("Acme"), any(), any());
+    }
+
+    @Test
+    void aJobSkippedAsSpamSharesNobody() {
+        ImportResponse result = service.upload("alice", null,
+                new ImportRequest(List.of(TrackerRowMapperTest.row("Skipped", "", "Spam / duplicate")), null));
+
+        assertThat(result.recruitersShared()).isZero();
+        verify(recruiters, never()).share(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void aSkippedJobsRecruiterStaysPrivateWhenTheUploaderSaysSo() {
+        ImportResponse result = service.upload("alice", null,
+                new ImportRequest(List.of(TrackerRowMapperTest.row("Skipped", "", "Location")), false));
+
+        assertThat(result.recruitersShared()).isZero();
+        verify(recruiters, never()).share(any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -135,7 +166,7 @@ class ImportServiceTest {
     void aStaffingFirmsRecruiterIsFiledUnderTheFirmNotItsClient() {
         var viaVendor = new TrackerRow("li-4", "Big Bank", "TekStaff", "Java Developer", null, null, null,
                 null, null, null, null, null, "Applied", null, "Sam Lee", null, "sam@tekstaff.com", null,
-                null, null, null, null, null, null);
+                null, null, null, null, null, null, null);
 
         service.upload("alice", null, new ImportRequest(List.of(viaVendor), null));
 

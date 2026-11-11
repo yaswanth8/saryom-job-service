@@ -14,11 +14,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class TrackerRowMapperTest {
 
-    static TrackerRow row(String status, String stage) {
+    static TrackerRow row(String status, String stage, String category) {
         return new TrackerRow("li-1", "Acme", "Not listed", "Java Developer", "Austin, TX · On-site",
                 "Not stated", "LinkedIn", "https://example.com/job/1", "notes", "On-site", "W2", "High",
                 status, stage, "Priya Shah", "Recruiter", "priya@acme.com", "555-0100",
-                "https://linkedin.com/in/priya", "2026-11-01", "2026-11-02", "", "claude", "");
+                "https://linkedin.com/in/priya", "2026-11-01", "2026-11-02", "", "claude", "", category);
+    }
+
+    static TrackerRow row(String status, String stage) {
+        return row(status, stage, null);
     }
 
     @ParameterizedTest
@@ -66,7 +70,7 @@ class TrackerRowMapperTest {
     @Test
     void anEmailThatIsNotOneIsDroppedRatherThanPublished() {
         var broken = new TrackerRow("li-2", "Acme", null, "Dev", null, null, null, null, null, null, null,
-                null, "Applied", null, "Sam", null, "see profile", null, null, null, null, null, null, null);
+                null, "Applied", null, "Sam", null, "see profile", null, null, null, null, null, null, null, null);
 
         assertThat(TrackerRowMapper.contact(broken).email()).isNull();
         assertThat(TrackerRowMapper.contact(broken).name()).isEqualTo("Sam");
@@ -77,9 +81,22 @@ class TrackerRowMapperTest {
         assertThat(TrackerRowMapper.isTrackable(row("Applied", ""))).isTrue();
         assertThat(TrackerRowMapper.isTrackable(new TrackerRow(null, "Acme", null, "Dev", null, null, null,
                 null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-                null, null))).isFalse();
+                null, null, null))).isFalse();
         assertThat(TrackerRowMapper.isTrackable(new TrackerRow("li-3", "Not listed", null, "Dev", null, null,
                 null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-                null, null, null))).isFalse();
+                null, null, null, null))).isFalse();
+    }
+
+    @ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({
+            "Location, true", "Seniority, true", "Pay below floor, true", "Stale / duplicate, true",
+            "Spam / duplicate, false", "spam, false"})
+    void aSkippedJobsRecruiterIsWorthSharingUnlessItWasSpam(String category, boolean shareable) {
+        assertThat(TrackerRowMapper.hasShareableRecruiter(row("Skipped", "", category))).isEqualTo(shareable);
+    }
+
+    @Test
+    void aSkipWithNoReasonGivenIsNotTreatedAsSpam() {
+        assertThat(TrackerRowMapper.hasShareableRecruiter(row("Skipped", ""))).isTrue();
     }
 }
