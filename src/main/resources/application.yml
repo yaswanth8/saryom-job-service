@@ -1,0 +1,51 @@
+spring:
+  application:
+    name: saryom-job-service
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    # No currentSchema parameter: a pooler in front of Postgres may reject the
+    # startup option it becomes. Hibernate and Flyway are told the schema
+    # explicitly below, and the database role defaults its search_path to it.
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/saryom}
+    username: ${DB_USER:saryom_jobs}
+    password: ${DB_PASSWORD:saryom_jobs_local}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        default_schema: jobs
+  flyway:
+    enabled: true
+    schemas: jobs
+    default-schema: jobs
+
+server:
+  port: ${PORT:8088}
+
+saryom:
+  jobs:
+    rls:
+      # Writes the caller's identity into each transaction so the database's row
+      # level security policies can see it. Off only for the H2 test suite,
+      # which has no policies to satisfy.
+      enabled: ${JOBS_RLS_ENABLED:true}
+    import:
+      # Rows accepted in one upload. A tracker rarely holds more than a few
+      # hundred; the cap keeps one request from holding a transaction for long.
+      max-rows: ${JOBS_IMPORT_MAX_ROWS:1000}
+    tokens:
+      max-per-user: ${JOBS_TOKENS_MAX_PER_USER:5}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true

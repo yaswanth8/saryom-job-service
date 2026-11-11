@@ -1,0 +1,28 @@
+# Render Blueprint — saryom-job-service
+# Secrets (sync:false) are entered in the Render dashboard on first deploy.
+services:
+  - type: web
+    name: saryom-job-service
+    runtime: docker
+    plan: free
+    region: oregon
+    healthCheckPath: /actuator/health
+    autoDeploy: true
+    dockerfilePath: ./Dockerfile
+    envVars:
+      # Any profile other than "dev" verifies real Firebase tokens.
+      - key: SPRING_PROFILES_ACTIVE
+        value: prod
+      # Small on purpose: Supabase's session pooler has a limited number of slots.
+      - key: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE
+        value: "3"
+      # jdbc:postgresql://<pooler-host>:5432/postgres?sslmode=require
+      - key: DB_URL
+        sync: false
+      # saryom_jobs.<project-ref>
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: FIREBASE_SERVICE_ACCOUNT_JSON
+        sync: false
