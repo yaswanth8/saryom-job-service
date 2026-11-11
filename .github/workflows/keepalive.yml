@@ -1,0 +1,26 @@
+name: Keep the database awake
+# Supabase pauses a free-plan project after about a week with too little
+# database activity, and a paused project has to be restored by hand in the
+# dashboard. Jobs would be down, with nothing in the service's own logs to say
+# why. One request a day that reads from the database is enough to prevent it.
+#
+# The request goes to the public directory summary, so it needs no credentials,
+# and it also wakes the Render instance, which costs about 15 minutes of the
+# free plan's monthly hours each day.
+#
+# Not needed once the Supabase project is on a paid plan: delete this file then.
+on:
+  schedule:
+    - cron: '17 11 * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read the recruiter directory summary
+        run: |
+          # The instance may be asleep; give it time to start before giving up.
+          curl --fail --silent --show-error \
+               --retry 8 --retry-delay 20 --retry-all-errors --max-time 60 \
+               https://saryom-job-service.onrender.com/api/jobs/recruiters/summary
