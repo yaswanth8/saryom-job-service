@@ -23,6 +23,26 @@ public interface ApplicationRepository extends JpaRepository<Application, UUID> 
 
     List<Application> findByUserIdAndExternalIdIn(String userId, Collection<String> externalIds);
 
+    /**
+     * A user's applications whose contact is this recruiter: the same email,
+     * the same profile link, or the same name at the same firm (the staffing
+     * firm when there is one, as in the directory). Blank arguments match
+     * nothing, so a recruiter with no email is not matched on email.
+     */
+    @Query("""
+            select a from Application a
+            where a.userId = :userId
+              and ((:email <> '' and lower(a.contactEmail) = :email)
+                   or (:url <> '' and a.contactUrl = :url)
+                   or (:name <> '' and lower(a.contactName) = :name
+                       and (:company = '' or lower(coalesce(a.vendor, a.company)) = :company
+                            or lower(a.company) = :company)))
+            order by a.updatedAt desc
+            """)
+    List<Application> findWithContact(@Param("userId") String userId, @Param("email") String email,
+                                      @Param("url") String url, @Param("name") String name,
+                                      @Param("company") String company);
+
     @Query("select a.status as status, count(a) as total from Application a "
             + "where a.userId = :userId group by a.status")
     List<StatusCount> countByStatus(@Param("userId") String userId);

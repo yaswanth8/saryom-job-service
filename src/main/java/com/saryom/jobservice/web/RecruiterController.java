@@ -1,9 +1,11 @@
 package com.saryom.jobservice.web;
 
 import com.saryom.jobservice.auth.CurrentUser;
+import com.saryom.jobservice.domain.RecruiterSort;
 import com.saryom.jobservice.domain.RoleCategory;
 import com.saryom.jobservice.service.RecruiterService;
 import com.saryom.jobservice.web.dto.DirectorySummaryResponse;
+import com.saryom.jobservice.web.dto.RecruiterProfileResponse;
 import com.saryom.jobservice.web.dto.RecruiterRequest;
 import com.saryom.jobservice.web.dto.RecruiterResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -37,15 +39,22 @@ public class RecruiterController {
     @GetMapping
     public Page<RecruiterResponse> browse(@RequestParam(required = false) RoleCategory category,
                                           @RequestParam(required = false) String q,
+                                          @RequestParam(required = false) String sort,
                                           @RequestParam(defaultValue = "0") int page,
                                           @RequestParam(defaultValue = "20") int size) {
-        return recruiters.browse(category, q, page, size, CurrentUser.uid());
+        return recruiters.browse(category, q, RecruiterSort.of(sort), page, size, CurrentUser.uid());
     }
 
     /** Counts by kind of role and by company. No contact details, so safe to show anyone. */
     @GetMapping("/summary")
     public DirectorySummaryResponse summary() {
         return recruiters.summary();
+    }
+
+    /** One recruiter in full. Public, with contact details and the viewer's applications for signed-in users. */
+    @GetMapping("/{id}")
+    public RecruiterProfileResponse profile(@PathVariable UUID id) {
+        return recruiters.profile(id, CurrentUser.uid());
     }
 
     @PostMapping

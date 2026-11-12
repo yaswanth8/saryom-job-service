@@ -54,9 +54,9 @@ public class ApplicationService {
             total++;
             if (a.getStatus().isOpen()) {
                 open++;
-                if (a.getFollowUpOn() != null && !a.getFollowUpOn().isAfter(today)) {
-                    due++;
-                }
+            }
+            if (a.followUpDue(today)) {
+                due++;
             }
         }
         return new ApplicationSummaryResponse(total, open, due, byStatus);
@@ -95,6 +95,18 @@ public class ApplicationService {
         LocalDate today = LocalDate.now(clock);
         Application application = owned(id, uid);
         application.moveTo(status, today, clock.instant());
+        return ApplicationResponse.from(applications.save(application), today);
+    }
+
+    /**
+     * Sets the next follow-up date, or clears it with null. "I followed up"
+     * on the dashboard is this with a date a week out.
+     */
+    @Transactional
+    public ApplicationResponse scheduleFollowUp(UUID id, String uid, LocalDate on) {
+        LocalDate today = LocalDate.now(clock);
+        Application application = owned(id, uid);
+        application.scheduleFollowUp(on, clock.instant());
         return ApplicationResponse.from(applications.save(application), today);
     }
 

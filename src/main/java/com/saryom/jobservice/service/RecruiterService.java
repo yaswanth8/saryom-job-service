@@ -1,13 +1,16 @@
 package com.saryom.jobservice.service;
 
 import com.saryom.jobservice.domain.Application.Contact;
+import com.saryom.jobservice.domain.ApplicationRepository;
 import com.saryom.jobservice.domain.Recruiter;
 import com.saryom.jobservice.domain.RecruiterRepository;
 import com.saryom.jobservice.domain.RecruiterSighting;
 import com.saryom.jobservice.domain.RecruiterSightingRepository;
+import com.saryom.jobservice.domain.RecruiterSort;
 import com.saryom.jobservice.domain.RoleCategory;
 import com.saryom.jobservice.error.NotFoundException;
 import com.saryom.jobservice.web.dto.DirectorySummaryResponse;
+import com.saryom.jobservice.web.dto.RecruiterProfileResponse;
 import com.saryom.jobservice.web.dto.RecruiterRequest;
 import com.saryom.jobservice.web.dto.RecruiterResponse;
 import org.springframework.data.domain.Page;
@@ -19,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -34,15 +38,18 @@ import java.util.stream.Collectors;
 public class RecruiterService {
 
     private static final int TOP_COMPANIES = 8;
+    private static final int COLLEAGUES = 6;
 
     private final RecruiterRepository recruiters;
     private final RecruiterSightingRepository sightings;
+    private final ApplicationRepository applications;
     private final Clock clock;
 
     public RecruiterService(RecruiterRepository recruiters, RecruiterSightingRepository sightings,
-                            Clock clock) {
+                            ApplicationRepository applications, Clock clock) {
         this.recruiters = recruiters;
         this.sightings = sightings;
+        this.applications = applications;
         this.clock = clock;
     }
 
@@ -51,13 +58,19 @@ public class RecruiterService {
      *                  the means to contact anyone
      */
     @Transactional(readOnly = true)
-    public Page<RecruiterResponse> browse(RoleCategory category, String q, int page, int size,
-                                          String viewerUid) {
+    public Page<RecruiterResponse> browse(RoleCategory category, String q, RecruiterSort sort, int page,
+                                          int size, String viewerUid) {
         String text = Text.clean(q);
         String pattern = text == null ? "%" : "%" + escapeLike(text.toLowerCase(Locale.ROOT)) + "%";
-        Page<Recruiter> found = recruiters.browse(category == null,
-                category == null ? RoleCategory.OTHER : category, pattern,
-                PageRequest.of(Math.max(page, 0), Math.clamp(size, 1, 50)));
+        boolean any = category == null;
+        RoleCategory facet = any ? RoleCategory.OTHER : category;
+        PageRequest request = PageRequest.of(Math.max(page, 0), Math.clamp(size, 1, 50));
+        Page<Recruiter> found = switch (sort == null ? RecruiterSort.RECENT : sort) {
+            case RECENT -> recruiters.browseRecentlySeen(any, facet, pattern, request);
+            case REPORTED -> recruiters.browseMostReported(any, facet, pattern, request);
+            case NAME -> recruiters.browseByName(any, facet, pattern, request);
+            case NEWEST -> recruiters.browseNewest(any, facet, pattern, request);
+        };
 
         // One read for the whole page's roles rather than one per recruiter.
         Map<UUID, List<RecruiterSighting>> byRecruiter = sightings
@@ -66,6 +79,78 @@ public class RecruiterService {
                 .collect(Collectors.groupingBy(RecruiterSighting::getRecruiterId));
 
         return found.map(r -> toResponse(r, byRecruiter.getOrDefault(r.getId(), List.of()), viewerUid));
+    }
+
+    /**
+     * One recruiter in full, for their profile page.
+     *
+     * @param viewerUid null for anonymous visitors, who get no contact details
+     *                  and no applications
+     */
+    @Transactional(readOnly = true)
+    public RecruiterProfileResponse profile(UUID id, String viewerUid) {
+        Recruiter r = recruiters.findById(id)
+                .orElseThrow(() -> new NotFoundException("No recruiter " + id));
+        List<RecruiterSighting> seen = sightings.findByRecruiterIdIn(List.of(id));
+        boolean signedIn = viewerUid != null;
+
+        // One row per role, however many people reported it.
+        Map<String, List<RecruiterSighting>> byRole = seen.stream()
+                .collect(Collectors.groupingBy(RecruiterSighting::getRoleKey, LinkedHashMap::new, Collectors.toList()));
+        List<RecruiterProfileResponse.Role> roles = byRole.values().stream()
+                .map(RecruiterService::mergeRole)
+                .sorted(Comparator.comparing(RecruiterProfileResponse.Role::lastSeenOn,
+                                Comparator.nullsLast(Comparator.<LocalDate>reverseOrder()))
+                        .thenComparing(RecruiterProfileResponse.Role::title, String.CASE_INSENSITIVE_ORDER))
+                .toList();
+
+        List<RecruiterProfileResponse.Colleague> colleagues = r.getCompany() == null ? List.of()
+                : recruiters.colleagues(r.getCompany(), id, PageRequest.of(0, COLLEAGUES)).stream()
+                        .map(c -> new RecruiterProfileResponse.Colleague(c.getId(), c.getFullName(), c.getTitle()))
+                        .toList();
+
+        List<RecruiterProfileResponse.LinkedApplication> mineToo = !signedIn ? List.of()
+                : applications.findWithContact(viewerUid, lower(r.getEmail()),
+                                r.getProfileUrl() == null ? "" : r.getProfileUrl(), lower(r.getFullName()),
+                                lower(r.getCompany())).stream()
+                        .map(a -> new RecruiterProfileResponse.LinkedApplication(a.getId(), a.getCompany(),
+                                a.getRole(), a.getStatus(), a.getAppliedOn()))
+                        .toList();
+
+        return new RecruiterProfileResponse(r.getId(), r.getFullName(), r.getTitle(), r.getCompany(),
+                signedIn ? r.getEmail() : null,
+                signedIn ? r.getPhone() : null,
+                signedIn ? r.getProfileUrl() : null,
+                !signedIn, signedIn && r.wasContributedBy(viewerUid),
+                (int) seen.stream().map(RecruiterSighting::getContributedBy).distinct().count(),
+                seen.stream().map(RecruiterSighting::getSeenOn).max(Comparator.naturalOrder()).orElse(null),
+                LocalDate.ofInstant(r.getCreatedAt(), clock.getZone()),
+                roles, colleagues, mineToo);
+    }
+
+    private static RecruiterProfileResponse.Role mergeRole(List<RecruiterSighting> reports) {
+        RecruiterSighting first = reports.getFirst();
+        return new RecruiterProfileResponse.Role(first.getRoleTitle(), first.getRoleCategory(),
+                first.getRoleCategory().label(),
+                distinct(reports.stream().map(RecruiterSighting::getCompany).toList()),
+                distinct(reports.stream().map(RecruiterSighting::getLocation).toList()),
+                reports.stream().map(RecruiterSighting::getSeenOn).max(Comparator.naturalOrder()).orElse(null),
+                (int) reports.stream().map(RecruiterSighting::getContributedBy).distinct().count());
+    }
+
+    /** Non-blank values, first spelling kept, compared without case. */
+    private static List<String> distinct(List<String> values) {
+        Map<String, String> kept = new LinkedHashMap<>();
+        for (String v : values) {
+            if (v != null && !v.isBlank()) {
+                kept.putIfAbsent(v.trim().toLowerCase(Locale.ROOT), v.trim());
+            }
+        }
+        return List.copyOf(kept.values());
+    }
+
+    private static String lower(String value) {
+        return value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
     }
 
     @Transactional(readOnly = true)

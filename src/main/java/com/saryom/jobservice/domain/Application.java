@@ -184,6 +184,34 @@ public class Application {
         this.updatedAt = now;
     }
 
+    /** Days after applying with no reply before a follow-up is due, unless a date is set. */
+    public static final int DEFAULT_FOLLOW_UP_DAYS = 7;
+
+    /**
+     * Whether it is time to chase this application.
+     *
+     * <p>A follow-up date, when there is one, decides. Without one, an
+     * application that has sat at "applied" for a week is due: that is the
+     * job-search tracker's rule, and most applications never get a date typed
+     * in, so a date-only rule left the reminder silent for nearly all of them.
+     */
+    public boolean followUpDue(LocalDate today) {
+        if (!status.isOpen()) {
+            return false;
+        }
+        if (followUpOn != null) {
+            return !followUpOn.isAfter(today);
+        }
+        return status == ApplicationStatus.APPLIED && appliedOn != null
+                && !appliedOn.plusDays(DEFAULT_FOLLOW_UP_DAYS).isAfter(today);
+    }
+
+    /** Sets, moves or (with null) clears the follow-up date. */
+    public void scheduleFollowUp(LocalDate on, Instant now) {
+        this.followUpOn = on;
+        this.updatedAt = now;
+    }
+
     public boolean hasContact() {
         return contactName != null && !contactName.isBlank();
     }
