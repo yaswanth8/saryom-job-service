@@ -5,6 +5,7 @@ import com.saryom.jobservice.service.ApplicationService;
 import com.saryom.jobservice.web.dto.ApplicationRequest;
 import com.saryom.jobservice.web.dto.ApplicationResponse;
 import com.saryom.jobservice.web.dto.ApplicationSummaryResponse;
+import com.saryom.jobservice.web.dto.FollowUpRequest;
 import com.saryom.jobservice.web.dto.MoveRequest;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -65,6 +66,12 @@ public class ApplicationController {
     @PatchMapping("/{id}/status")
     public ApplicationResponse move(@PathVariable UUID id, @Valid @RequestBody MoveRequest request) {
         return applications.move(id, CurrentUser.requireUid(), request.status());
+    }
+
+    /** Setting or clearing the next follow-up date, e.g. after chasing a recruiter. */
+    @PatchMapping("/{id}/follow-up")
+    public ApplicationResponse followUp(@PathVariable UUID id, @RequestBody FollowUpRequest request) {
+        return applications.scheduleFollowUp(id, CurrentUser.requireUid(), request.followUpOn());
     }
 
     @DeleteMapping("/{id}")

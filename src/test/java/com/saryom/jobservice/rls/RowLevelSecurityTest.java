@@ -245,6 +245,66 @@ class RowLevelSecurityTest {
     }
 
     @Test
+    void aProfileShowsEachViewerOnlyTheirOwnApplicationsWithThatRecruiter() throws Exception {
+        String alices = createApplication(ALICE, "Acme");
+        // Bob reports the same recruiter for a different role, with no application.
+        mvc.perform(post("/api/jobs/recruiters").header("Authorization", BOB)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"fullName":"Priya Shah","email":"priya@acme.example",
+                                 "roleTitle":"React Developer","company":"Acme","location":"Austin, TX"}"""))
+                .andExpect(status().isCreated());
+        MvcResult listed = mvc.perform(get("/api/jobs/recruiters")).andReturn();
+        String id = com.jayway.jsonpath.JsonPath.read(listed.getResponse().getContentAsString(), "$.content[0].id");
+
+        mvc.perform(get("/api/jobs/recruiters/" + id).header("Authorization", ALICE))
+                .andExpect(jsonPath("$.email").value("priya@acme.example"))
+                .andExpect(jsonPath("$.seenBy").value(2))
+                .andExpect(jsonPath("$.roles", hasSize(2)))
+                .andExpect(jsonPath("$.applications", hasSize(1)))
+                .andExpect(jsonPath("$.applications[0].id").value(alices))
+                .andExpect(jsonPath("$.applications[0].status").value("APPLIED"));
+        mvc.perform(get("/api/jobs/recruiters/" + id).header("Authorization", BOB))
+                .andExpect(jsonPath("$.applications", hasSize(0)));
+        mvc.perform(get("/api/jobs/recruiters/" + id))
+                .andExpect(jsonPath("$.contactLocked").value(true))
+                .andExpect(jsonPath("$.email").doesNotExist())
+                .andExpect(jsonPath("$.applications", hasSize(0)))
+                .andExpect(jsonPath("$.roles[?(@.title == 'React Developer')].locations[0]").value("Austin, TX"));
+        mvc.perform(get("/api/jobs/recruiters/" + UUID.randomUUID())).andExpect(status().isNotFound());
+    }
+
+    @Test
+    void theDirectoryCanBeSortedByReachNameAndRecency() throws Exception {
+        createApplication(ALICE, "Acme");
+        createApplication(ALICE, "Zenith");
+        // Zenith's recruiter is reported by Bob too, so is the most reported.
+        mvc.perform(post("/api/jobs/recruiters").header("Authorization", BOB)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"fullName":"Priya Shah","email":"priya@zenith.example",
+                                 "roleTitle":"Java Developer","company":"Zenith"}"""))
+                .andExpect(status().isCreated());
+        mvc.perform(post("/api/jobs/recruiters").header("Authorization", BOB)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"fullName":"Aaron Ng","email":"aaron@globex.example",
+                                 "roleTitle":"Data Engineer","company":"Globex"}"""))
+                .andExpect(status().isCreated());
+
+        mvc.perform(get("/api/jobs/recruiters").param("sort", "reported"))
+                .andExpect(jsonPath("$.content", hasSize(3)))
+                .andExpect(jsonPath("$.content[0].company").value("Zenith"))
+                .andExpect(jsonPath("$.content[0].seenBy").value(2));
+        mvc.perform(get("/api/jobs/recruiters").param("sort", "name"))
+                .andExpect(jsonPath("$.content[0].fullName").value("Aaron Ng"));
+        mvc.perform(get("/api/jobs/recruiters").param("sort", "newest"))
+                .andExpect(jsonPath("$.content[0].fullName").value("Aaron Ng"));
+        mvc.perform(get("/api/jobs/recruiters").param("sort", "recent").param("category", "DATA"))
+                .andExpect(jsonPath("$.totalElements").value(1));
+    }
+
+    @Test
     void onlyTheContributorCanRemoveADirectoryEntry() throws Exception {
         createApplication(ALICE, "Acme");
         MvcResult listed = mvc.perform(get("/api/jobs/recruiters").header("Authorization", ALICE)).andReturn();

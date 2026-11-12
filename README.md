@@ -37,15 +37,23 @@ filters rows, not columns.
 | `POST /api/jobs/applications` | sign-in | add one |
 | `PUT /api/jobs/applications/{id}` | sign-in | edit |
 | `PATCH /api/jobs/applications/{id}/status` | sign-in | move along the pipeline |
+| `PATCH /api/jobs/applications/{id}/follow-up` | sign-in | set or clear the next follow-up date |
 | `DELETE /api/jobs/applications/{id}` | sign-in | remove |
 | `POST /api/jobs/import` | sign-in **or import token** | upload a tracker |
-| `GET /api/jobs/recruiters?category=&q=` | public | browse the directory |
+| `GET /api/jobs/recruiters?category=&q=&sort=` | public | browse the directory; `sort` is `recent` (default), `reported`, `name` or `newest` |
 | `GET /api/jobs/recruiters/summary` | public | counts by role and company |
+| `GET /api/jobs/recruiters/{id}` | public | a recruiter's profile: roles, where and when seen, others at the firm, and (signed in) your own applications with them |
 | `POST /api/jobs/recruiters` | sign-in | add a recruiter |
 | `DELETE /api/jobs/recruiters/{id}` | contributor or admin | remove an entry |
 | `GET/POST /api/jobs/tokens`, `DELETE /api/jobs/tokens/{id}` | sign-in | manage import tokens |
 
 Swagger UI at `/swagger-ui.html`.
+
+**Follow-ups.** An application is due for a follow-up when its follow-up date
+has arrived or, with no date set, when it has sat at Applied for 7 days with no
+reply (the job-search tracker's rule). Closed applications are never due.
+Setting a date, as the dashboard's "I followed up" does with a date a week out,
+takes over from the 7-day rule.
 
 ## Uploading from the job-search skill
 

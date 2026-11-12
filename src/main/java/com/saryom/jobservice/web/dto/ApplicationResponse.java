@@ -33,7 +33,7 @@ public record ApplicationResponse(
         LocalDate foundOn,
         LocalDate appliedOn,
         LocalDate followUpOn,
-        /** True when a follow-up date has arrived on an application still in play. */
+        /** True when it is time to chase this application: see {@link Application#followUpDue}. */
         boolean followUpDue,
         String appliedBy,
         Instant createdAt,
@@ -42,8 +42,7 @@ public record ApplicationResponse(
     public static ApplicationResponse from(Application a, LocalDate today) {
         var posting = a.posting();
         var contact = a.contact();
-        boolean due = a.getFollowUpOn() != null && !a.getFollowUpOn().isAfter(today)
-                && a.getStatus().isOpen();
+        boolean due = a.followUpDue(today);
         return new ApplicationResponse(a.getId(), a.getExternalId(), posting.company(), posting.vendor(),
                 posting.role(), posting.location(), posting.workType(), posting.employmentType(),
                 posting.pay(), posting.source(), posting.link(), posting.fit(), a.getStatus(),
