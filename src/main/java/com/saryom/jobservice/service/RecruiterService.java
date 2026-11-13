@@ -6,6 +6,7 @@ import com.saryom.jobservice.domain.Recruiter;
 import com.saryom.jobservice.domain.RecruiterRepository;
 import com.saryom.jobservice.domain.RecruiterSighting;
 import com.saryom.jobservice.domain.RecruiterSightingRepository;
+import com.saryom.jobservice.domain.RecruiterReach;
 import com.saryom.jobservice.domain.RecruiterSort;
 import com.saryom.jobservice.domain.RoleCategory;
 import com.saryom.jobservice.error.NotFoundException;
@@ -58,18 +59,20 @@ public class RecruiterService {
      *                  the means to contact anyone
      */
     @Transactional(readOnly = true)
-    public Page<RecruiterResponse> browse(RoleCategory category, String q, RecruiterSort sort, int page,
-                                          int size, String viewerUid) {
+    public Page<RecruiterResponse> browse(RoleCategory category, String q, RecruiterSort sort,
+                                          RecruiterReach reach, int page, int size, String viewerUid) {
         String text = Text.clean(q);
         String pattern = text == null ? "%" : "%" + escapeLike(text.toLowerCase(Locale.ROOT)) + "%";
         boolean any = category == null;
         RoleCategory facet = any ? RoleCategory.OTHER : category;
         PageRequest request = PageRequest.of(Math.max(page, 0), Math.clamp(size, 1, 50));
+        String by = (reach == null ? RecruiterReach.ANY : reach).param();
         Page<Recruiter> found = switch (sort == null ? RecruiterSort.RECENT : sort) {
-            case RECENT -> recruiters.browseRecentlySeen(any, facet, pattern, request);
-            case REPORTED -> recruiters.browseMostReported(any, facet, pattern, request);
-            case NAME -> recruiters.browseByName(any, facet, pattern, request);
-            case NEWEST -> recruiters.browseNewest(any, facet, pattern, request);
+            case RECENT -> recruiters.browseRecentlySeen(any, facet, pattern, by, request);
+            case REPORTED -> recruiters.browseMostReported(any, facet, pattern, by, request);
+            case NAME -> recruiters.browseByName(any, facet, pattern, by, request);
+            case COMPANY -> recruiters.browseByCompany(any, facet, pattern, by, request);
+            case NEWEST -> recruiters.browseNewest(any, facet, pattern, by, request);
         };
 
         // One read for the whole page's roles rather than one per recruiter.
@@ -165,7 +168,8 @@ public class RecruiterService {
                 .map(c -> new DirectorySummaryResponse.CompanyCount(c.getCompany(), c.getTotal()))
                 .toList();
         return new DirectorySummaryResponse(recruiters.count(), sightings.countContributors(),
-                categories, companies);
+                categories, companies, recruiters.countByEmailIsNotNull(), recruiters.countByPhoneIsNotNull(),
+                recruiters.countByProfileUrlIsNotNull());
     }
 
     @Transactional

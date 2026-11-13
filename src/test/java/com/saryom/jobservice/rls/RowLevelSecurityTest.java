@@ -26,6 +26,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -302,6 +303,69 @@ class RowLevelSecurityTest {
                 .andExpect(jsonPath("$.content[0].fullName").value("Aaron Ng"));
         mvc.perform(get("/api/jobs/recruiters").param("sort", "recent").param("category", "DATA"))
                 .andExpect(jsonPath("$.totalElements").value(1));
+    }
+
+    @Test
+    void aTwoPointXTrackerUploadKeepsThePostingsDetailsAcrossReuploads() throws Exception {
+        String first = """
+                {"jobs":[{"id":"li-77","company":"Acme","role":"Java Developer","status":"Review",
+                  "reviewReason":"ready","fit":"Stretch","spons":"Verified","via":"apify","easyApply":true,
+                  "applyUrl":"https://acme.example/apply","ats":"Workday","postedAt":"2026-11-12T08:30:00Z",
+                  "desc":"We build payments software.","contactNote":"NA: no hiring team shown on the posting",
+                  "claudeCanApply":true}]}""";
+        mvc.perform(post("/api/jobs/import").header("Authorization", ALICE)
+                        .contentType(MediaType.APPLICATION_JSON).content(first))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.created").value(1));
+        // A later upload that leaves the details out (an older tracker) keeps them.
+        mvc.perform(post("/api/jobs/import").header("Authorization", ALICE)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"jobs\":[{\"id\":\"li-77\",\"company\":\"Acme\",\"role\":\"Java Developer\",\"fit\":\"Stretch\",\"status\":\"Queued\"}]}"))
+                .andExpect(jsonPath("$.updated").value(1));
+
+        mvc.perform(get("/api/jobs/applications").header("Authorization", ALICE))
+                .andExpect(jsonPath("$[0].fit").value("STRETCH"))
+                .andExpect(jsonPath("$[0].sponsorship").value("VERIFIED"))
+                .andExpect(jsonPath("$[0].foundVia").value("APIFY"))
+                .andExpect(jsonPath("$[0].easyApply").value(true))
+                .andExpect(jsonPath("$[0].applyUrl").value("https://acme.example/apply"))
+                .andExpect(jsonPath("$[0].ats").value("Workday"))
+                .andExpect(jsonPath("$[0].postedAt").value("2026-11-12T08:30:00Z"))
+                .andExpect(jsonPath("$[0].description").value("We build payments software."))
+                .andExpect(jsonPath("$[0].nextStep").value("QUEUED"));
+
+        // Once the user applies, there is no next step to show.
+        String id = com.jayway.jsonpath.JsonPath.read(mvc.perform(get("/api/jobs/applications")
+                .header("Authorization", ALICE)).andReturn().getResponse().getContentAsString(), "$[0].id");
+        mvc.perform(patch("/api/jobs/applications/" + id + "/status").header("Authorization", ALICE)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"APPLIED\"}"))
+                .andExpect(jsonPath("$.nextStep").doesNotExist())
+                .andExpect(jsonPath("$.description").value("We build payments software."));
+    }
+
+    @Test
+    void theDirectoryCanBeNarrowedToRecruitersReachableOneWayAndSortedByFirm() throws Exception {
+        createApplication(ALICE, "Zenith");
+        mvc.perform(post("/api/jobs/recruiters").header("Authorization", BOB)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"fullName":"Aaron Ng","profileUrl":"https://www.linkedin.com/in/aaron-ng",
+                                 "roleTitle":"Data Engineer","company":"Globex"}"""))
+                .andExpect(status().isCreated());
+
+        mvc.perform(get("/api/jobs/recruiters").param("reach", "email"))
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].fullName").value("Priya Shah"));
+        mvc.perform(get("/api/jobs/recruiters").param("reach", "profile"))
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].fullName").value("Aaron Ng"));
+        mvc.perform(get("/api/jobs/recruiters").param("sort", "company"))
+                .andExpect(jsonPath("$.content[0].company").value("Globex"))
+                .andExpect(jsonPath("$.content[1].company").value("Zenith"));
+        mvc.perform(get("/api/jobs/recruiters/summary"))
+                .andExpect(jsonPath("$.withEmail").value(1))
+                .andExpect(jsonPath("$.withPhone").value(1))
+                .andExpect(jsonPath("$.withProfile").value(1));
     }
 
     @Test

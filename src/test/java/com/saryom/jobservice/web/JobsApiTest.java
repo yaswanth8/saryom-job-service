@@ -6,6 +6,7 @@ import com.saryom.jobservice.auth.ImportTokenAuthenticationFilter;
 import com.saryom.jobservice.auth.RestAuthenticationEntryPoint;
 import com.saryom.jobservice.auth.StubTokenVerifier;
 import com.saryom.jobservice.config.SecurityConfig;
+import com.saryom.jobservice.domain.RecruiterReach;
 import com.saryom.jobservice.domain.RecruiterSort;
 import com.saryom.jobservice.error.ApiExceptionHandler;
 import com.saryom.jobservice.service.ApplicationService;
@@ -78,8 +79,8 @@ class JobsApiTest {
 
     @Test
     void theDirectoryAndItsSummaryArePublic() throws Exception {
-        when(recruiters.browse(any(), any(), any(), anyInt(), anyInt(), isNull())).thenReturn(new PageImpl<>(List.of()));
-        when(recruiters.summary()).thenReturn(new DirectorySummaryResponse(0, 0, List.of(), List.of()));
+        when(recruiters.browse(any(), any(), any(), any(), anyInt(), anyInt(), isNull())).thenReturn(new PageImpl<>(List.of()));
+        when(recruiters.summary()).thenReturn(new DirectorySummaryResponse(0, 0, List.of(), List.of(), 0, 0, 0));
 
         mvc.perform(get("/api/jobs/recruiters")).andExpect(status().isOk());
         mvc.perform(get("/api/jobs/recruiters/summary")).andExpect(status().isOk());
@@ -87,11 +88,11 @@ class JobsApiTest {
 
     @Test
     void aSignedInViewerIsPassedThroughSoContactsUnlock() throws Exception {
-        when(recruiters.browse(any(), any(), any(), anyInt(), anyInt(), eq("alice"))).thenReturn(new PageImpl<>(List.of()));
+        when(recruiters.browse(any(), any(), any(), any(), anyInt(), anyInt(), eq("alice"))).thenReturn(new PageImpl<>(List.of()));
 
         mvc.perform(get("/api/jobs/recruiters").header("Authorization", ALICE)).andExpect(status().isOk());
 
-        verify(recruiters).browse(any(), any(), any(), anyInt(), anyInt(), eq("alice"));
+        verify(recruiters).browse(any(), any(), any(), any(), anyInt(), anyInt(), eq("alice"));
     }
 
     @Test
@@ -109,10 +110,10 @@ class JobsApiTest {
         mvc.perform(get("/api/jobs/tokens").header("Authorization", "Bearer sjt_good"))
                 .andExpect(status().isUnauthorized());
         // And it does not unlock contact details as a viewer would.
-        when(recruiters.browse(any(), any(), any(), anyInt(), anyInt(), isNull())).thenReturn(new PageImpl<>(List.of()));
+        when(recruiters.browse(any(), any(), any(), any(), anyInt(), anyInt(), isNull())).thenReturn(new PageImpl<>(List.of()));
         mvc.perform(get("/api/jobs/recruiters").header("Authorization", "Bearer sjt_good"))
                 .andExpect(status().isOk());
-        verify(recruiters).browse(any(), any(), any(), anyInt(), anyInt(), isNull());
+        verify(recruiters).browse(any(), any(), any(), any(), anyInt(), anyInt(), isNull());
     }
 
     @Test
@@ -136,13 +137,16 @@ class JobsApiTest {
 
     @Test
     void theSortOrderIsPassedThroughAndAnUnknownOneFallsBackToTheDefault() throws Exception {
-        when(recruiters.browse(any(), any(), any(), anyInt(), anyInt(), isNull())).thenReturn(new PageImpl<>(List.of()));
+        when(recruiters.browse(any(), any(), any(), any(), anyInt(), anyInt(), isNull())).thenReturn(new PageImpl<>(List.of()));
 
         mvc.perform(get("/api/jobs/recruiters").param("sort", "reported")).andExpect(status().isOk());
-        verify(recruiters).browse(isNull(), isNull(), eq(RecruiterSort.REPORTED), eq(0), eq(20), isNull());
+        verify(recruiters).browse(isNull(), isNull(), eq(RecruiterSort.REPORTED), eq(RecruiterReach.ANY), eq(0), eq(20), isNull());
 
         mvc.perform(get("/api/jobs/recruiters").param("sort", "whatever")).andExpect(status().isOk());
-        verify(recruiters).browse(isNull(), isNull(), eq(RecruiterSort.RECENT), eq(0), eq(20), isNull());
+        verify(recruiters).browse(isNull(), isNull(), eq(RecruiterSort.RECENT), eq(RecruiterReach.ANY), eq(0), eq(20), isNull());
+
+        mvc.perform(get("/api/jobs/recruiters").param("sort", "company").param("reach", "email")).andExpect(status().isOk());
+        verify(recruiters).browse(isNull(), isNull(), eq(RecruiterSort.COMPANY), eq(RecruiterReach.EMAIL), eq(0), eq(20), isNull());
     }
 
     @Test

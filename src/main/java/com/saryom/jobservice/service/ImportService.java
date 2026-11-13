@@ -113,6 +113,8 @@ public class ImportService {
                 updated++;
             }
             application.describe(posting, now);
+            // The latest upload's details win; a field it left out keeps what was there.
+            application.setDetails(TrackerRowMapper.details(row).over(application.details()), now);
             application.setAppliedBy(TrackerRowMapper.value(row.appliedBy(), 40));
             application.advanceTo(status, today, now);
             applications.save(application);
