@@ -98,6 +98,34 @@ public class Application {
     @Column(name = "applied_by")
     private String appliedBy;
 
+    // What the job-search skill recorded about the posting; see Details.
+    private String description;
+
+    @Column(name = "posted_at")
+    private Instant postedAt;
+
+    @Column(name = "easy_apply")
+    private Boolean easyApply;
+
+    @Column(name = "apply_url")
+    private String applyUrl;
+
+    private String ats;
+
+    @Enumerated(EnumType.STRING)
+    private Sponsorship sponsorship;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "found_via")
+    private FoundVia foundVia;
+
+    @Column(name = "contact_note")
+    private String contactNote;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "next_step")
+    private NextStep nextStep;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -229,6 +257,47 @@ public class Application {
     public record Posting(String company, String vendor, String role, String location,
                           WorkType workType, String employmentType, String pay, String source,
                           String link, Fit fit, String notes) {
+    }
+
+    /**
+     * What the job-search skill knows about a posting beyond the basics. Only
+     * uploads set these; the form on the site has no fields for them, so an
+     * edit there leaves them as they were.
+     */
+    public record Details(String description, Instant postedAt, Boolean easyApply, String applyUrl, String ats,
+                          Sponsorship sponsorship, FoundVia foundVia, String contactNote, NextStep nextStep) {
+
+        public static final Details NONE = new Details(null, null, null, null, null, null, null, null, null);
+
+        /** These values, with any this upload left out kept from {@code before}. */
+        public Details over(Details before) {
+            return new Details(or(description, before.description), or(postedAt, before.postedAt),
+                    or(easyApply, before.easyApply), or(applyUrl, before.applyUrl), or(ats, before.ats),
+                    or(sponsorship, before.sponsorship), or(foundVia, before.foundVia),
+                    or(contactNote, before.contactNote), or(nextStep, before.nextStep));
+        }
+
+        private static <T> T or(T value, T fallback) {
+            return value != null ? value : fallback;
+        }
+    }
+
+    public Details details() {
+        return new Details(description, postedAt, easyApply, applyUrl, ats, sponsorship, foundVia, contactNote,
+                nextStep);
+    }
+
+    public void setDetails(Details details, Instant now) {
+        this.description = details.description();
+        this.postedAt = details.postedAt();
+        this.easyApply = details.easyApply();
+        this.applyUrl = details.applyUrl();
+        this.ats = details.ats();
+        this.sponsorship = details.sponsorship();
+        this.foundVia = details.foundVia();
+        this.contactNote = details.contactNote();
+        this.nextStep = details.nextStep();
+        this.updatedAt = now;
     }
 
     /** The recruiter or hiring contact attached to a posting. */

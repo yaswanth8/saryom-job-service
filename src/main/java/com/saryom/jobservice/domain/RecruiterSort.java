@@ -10,6 +10,8 @@ public enum RecruiterSort {
     REPORTED,
     /** Alphabetical by name. */
     NAME,
+    /** By firm, then name. */
+    COMPANY,
     /** Newest entries in the directory. */
     NEWEST;
 

@@ -99,4 +99,69 @@ class TrackerRowMapperTest {
     void aSkipWithNoReasonGivenIsNotTreatedAsSpam() {
         assertThat(TrackerRowMapper.hasShareableRecruiter(row("Skipped", ""))).isTrue();
     }
+
+    /** A row as the skill's 2.x tracker writes it. */
+    static TrackerRow row2x(String status, String reviewReason, String postedAt, String applyUrl) {
+        return new TrackerRow("li-7", "Acme", null, "Java Developer", "Remote", "$120K", "LinkedIn",
+                "https://example.com/job/7", "notes", "Remote", "Full-time", "Stretch", status, null,
+                null, null, null, null, null, "2026-11-12", null, null, null, null, null,
+                "We build payments software. Java 21, Spring Boot.", postedAt, "apify", true, applyUrl,
+                "Workday", "Verified", reviewReason, "NA: no hiring team shown on the posting");
+    }
+
+    @Test
+    void aTwoPointXRowCarriesThePostingsDetails() {
+        var d = TrackerRowMapper.details(row2x("Review", "ready", "2026-11-12T08:30:00Z", "https://acme.example/apply/7"));
+
+        assertThat(d.description()).startsWith("We build payments software");
+        assertThat(d.postedAt()).isEqualTo(java.time.Instant.parse("2026-11-12T08:30:00Z"));
+        assertThat(d.easyApply()).isTrue();
+        assertThat(d.applyUrl()).isEqualTo("https://acme.example/apply/7");
+        assertThat(d.ats()).isEqualTo("Workday");
+        assertThat(d.sponsorship()).isEqualTo(com.saryom.jobservice.domain.Sponsorship.VERIFIED);
+        assertThat(d.foundVia()).isEqualTo(com.saryom.jobservice.domain.FoundVia.APIFY);
+        assertThat(d.contactNote()).startsWith("NA:");
+        assertThat(d.nextStep()).isEqualTo(com.saryom.jobservice.domain.NextStep.READY);
+        assertThat(TrackerRowMapper.posting(row2x("Review", "ready", null, null)).fit()).isEqualTo(Fit.STRETCH);
+    }
+
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', nullValues = "null", value = {
+            "Review  | ready        | READY",
+            "Review  | contact      | REACH_OUT",
+            "Review  | company-site | COMPANY_SITE",
+            "Review  | needs-call   | YOUR_CALL",
+            "Queued  | null         | QUEUED",
+            "New     | null         | null",
+            "Applied | ready        | null",
+    })
+    void whatASavedJobIsWaitingForComesFromItsStatusAndReviewReason(String status, String reason,
+                                                                      com.saryom.jobservice.domain.NextStep expected) {
+        assertThat(TrackerRowMapper.nextStep(row2x(status, reason, null, null))).isEqualTo(expected);
+    }
+
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', value = {
+            "2026-11-12T08:30:00Z      | 2026-11-12T08:30:00Z",
+            "2026-11-12T08:30:00+05:00 | 2026-11-12T03:30:00Z",
+            "2026-11-12T08:30:00       | 2026-11-12T08:30:00Z",
+            "2026-11-12                | 2026-11-12T00:00:00Z",
+    })
+    void aPostingTimeIsReadInEveryShapeTheTrackerWritesIt(String raw, String expected) {
+        assertThat(TrackerRowMapper.instant(raw)).isEqualTo(java.time.Instant.parse(expected));
+    }
+
+    @Test
+    void anUnreadablePostingTimeOrUnsafeLinkIsDroppedNotStored() {
+        var d = TrackerRowMapper.details(row2x("Review", "ready", "yesterday", "javascript:alert(1)"));
+
+        assertThat(d.postedAt()).isNull();
+        assertThat(d.applyUrl()).isNull();
+    }
+
+    @Test
+    void anOlderRowHasNoDetailsAtAll() {
+        assertThat(TrackerRowMapper.details(row("Applied", ""))).isEqualTo(
+                com.saryom.jobservice.domain.Application.Details.NONE);
+    }
 }

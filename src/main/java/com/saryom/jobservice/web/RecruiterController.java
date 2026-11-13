@@ -1,6 +1,7 @@
 package com.saryom.jobservice.web;
 
 import com.saryom.jobservice.auth.CurrentUser;
+import com.saryom.jobservice.domain.RecruiterReach;
 import com.saryom.jobservice.domain.RecruiterSort;
 import com.saryom.jobservice.domain.RoleCategory;
 import com.saryom.jobservice.service.RecruiterService;
@@ -40,9 +41,11 @@ public class RecruiterController {
     public Page<RecruiterResponse> browse(@RequestParam(required = false) RoleCategory category,
                                           @RequestParam(required = false) String q,
                                           @RequestParam(required = false) String sort,
+                                          @RequestParam(required = false) String reach,
                                           @RequestParam(defaultValue = "0") int page,
                                           @RequestParam(defaultValue = "20") int size) {
-        return recruiters.browse(category, q, RecruiterSort.of(sort), page, size, CurrentUser.uid());
+        return recruiters.browse(category, q, RecruiterSort.of(sort), RecruiterReach.of(reach), page, size,
+                CurrentUser.uid());
     }
 
     /** Counts by kind of role and by company. No contact details, so safe to show anyone. */

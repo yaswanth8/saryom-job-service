@@ -9,7 +9,11 @@ public record DirectorySummaryResponse(
         long recruiters,
         long contributors,
         List<CategoryCount> categories,
-        List<CompanyCount> topCompanies) {
+        List<CompanyCount> topCompanies,
+        /** How many can be reached each way: counts only, for the directory's filters. */
+        long withEmail,
+        long withPhone,
+        long withProfile) {
 
     public record CategoryCount(RoleCategory category, String label, long recruiters) {
     }

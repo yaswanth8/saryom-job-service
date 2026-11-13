@@ -1,13 +1,21 @@
 package com.saryom.jobservice.service;
 
 import com.saryom.jobservice.domain.Application.Contact;
+import com.saryom.jobservice.domain.Application.Details;
 import com.saryom.jobservice.domain.Application.Posting;
 import com.saryom.jobservice.domain.ApplicationStatus;
 import com.saryom.jobservice.domain.Fit;
+import com.saryom.jobservice.domain.FoundVia;
+import com.saryom.jobservice.domain.NextStep;
+import com.saryom.jobservice.domain.Sponsorship;
 import com.saryom.jobservice.domain.WorkType;
 import com.saryom.jobservice.web.dto.TrackerRow;
 
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeParseException;
 import java.util.Locale;
 import java.util.Set;
@@ -63,6 +71,13 @@ final class TrackerRowMapper {
                 fit(row.fit()), value(row.notes(), 4000));
     }
 
+    /** The skill's richer posting details (2.x trackers); all null for an older row. */
+    static Details details(TrackerRow row) {
+        return new Details(value(row.desc(), 4000), instant(row.postedAt()), row.easyApply(),
+                url(row.applyUrl()), ats(row.ats()), sponsorship(row.spons()), foundVia(row.via()),
+                value(row.contactNote(), 300), nextStep(row));
+    }
+
     static Contact contact(TrackerRow row) {
         String email = value(row.contactEmail(), 320);
         return new Contact(value(row.contactName(), 200), value(row.contactTitle(), 200),
@@ -107,6 +122,74 @@ final class TrackerRowMapper {
         }
     }
 
+    /** A full timestamp, or a bare date read as midnight UTC. Null when it is neither. */
+    static Instant instant(String raw) {
+        String cleaned = Text.clean(raw);
+        if (cleaned == null) {
+            return null;
+        }
+        try {
+            return OffsetDateTime.parse(cleaned).toInstant();
+        } catch (DateTimeParseException notOffset) {
+            try {
+                return LocalDateTime.parse(cleaned).toInstant(ZoneOffset.UTC);
+            } catch (DateTimeParseException notLocal) {
+                LocalDate day = date(cleaned);
+                return day == null ? null : day.atStartOfDay(ZoneOffset.UTC).toInstant();
+            }
+        }
+    }
+
+    /** Only links a browser should follow: a stored {@code javascript:} link would run on click. */
+    private static String url(String raw) {
+        String cleaned = value(raw, 2000);
+        if (cleaned == null) {
+            return null;
+        }
+        String lower = cleaned.toLowerCase(Locale.ROOT);
+        return lower.startsWith("https://") || lower.startsWith("http://") ? cleaned : null;
+    }
+
+    private static String ats(String raw) {
+        String cleaned = value(raw, 60);
+        return cleaned == null || "unknown".equalsIgnoreCase(cleaned) ? null : cleaned;
+    }
+
+    private static Sponsorship sponsorship(String raw) {
+        return switch (lower(raw)) {
+            case "verified" -> Sponsorship.VERIFIED;
+            case "needs confirmation" -> Sponsorship.NEEDS_CONFIRMATION;
+            case "excluded" -> Sponsorship.EXCLUDED;
+            default -> null;
+        };
+    }
+
+    private static FoundVia foundVia(String raw) {
+        return switch (lower(raw)) {
+            case "apify" -> FoundVia.APIFY;
+            case "browser" -> FoundVia.BROWSER;
+            default -> null;
+        };
+    }
+
+    /** What a not-yet-applied row is waiting for: the tracker's Queued status, or its review reason. */
+    static NextStep nextStep(TrackerRow row) {
+        String status = lower(row.status());
+        if ("queued".equals(status)) {
+            return NextStep.QUEUED;
+        }
+        if (!"review".equals(status)) {
+            return null;
+        }
+        return switch (lower(row.reviewReason())) {
+            case "ready" -> NextStep.READY;
+            case "contact" -> NextStep.REACH_OUT;
+            case "company-site" -> NextStep.COMPANY_SITE;
+            case "needs-call" -> NextStep.YOUR_CALL;
+            default -> null;
+        };
+    }
+
     private static WorkType workType(String raw) {
         return switch (lower(raw)) {
             case "remote" -> WorkType.REMOTE;
@@ -120,6 +203,7 @@ final class TrackerRowMapper {
         return switch (lower(raw)) {
             case "high" -> Fit.HIGH;
             case "medium" -> Fit.MEDIUM;
+            case "stretch" -> Fit.STRETCH;
             case "low" -> Fit.LOW;
             default -> null;
         };
