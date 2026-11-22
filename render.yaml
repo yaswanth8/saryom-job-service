@@ -26,3 +26,5 @@ services:
         sync: false
       - key: FIREBASE_SERVICE_ACCOUNT_JSON
         sync: false
+      # OTLP_ENABLED, OTLP_ENDPOINT, OTLP_AUTH_HEADER, DEPLOY_ENV (shared env group)
+      - fromGroup: saryom-observability
