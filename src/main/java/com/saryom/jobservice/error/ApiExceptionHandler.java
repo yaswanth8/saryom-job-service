@@ -2,6 +2,7 @@ package com.saryom.jobservice.error;
 
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.dao.InvalidDataAccessApiUsageException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.security.access.AccessDeniedException;
@@ -45,6 +46,21 @@ public class ApiExceptionHandler {
     @ExceptionHandler(AccessDeniedException.class)
     ProblemDetail handleForbidden(AccessDeniedException e) {
         return problem(HttpStatus.FORBIDDEN, "Forbidden", "You do not have access to this resource");
+    }
+
+    /**
+     * A page number so large that page times size passes Integer.MAX_VALUE, as in
+     * {@code ?page=99999999}. Spring Data refuses to build that offset, and it used
+     * to surface as a 500. It is the caller's mistake, so it is a 400. Any other
+     * misuse of the data layer is still our bug and stays a 500.
+     */
+    @ExceptionHandler(InvalidDataAccessApiUsageException.class)
+    ProblemDetail handlePageTooFar(InvalidDataAccessApiUsageException e) {
+        String message = e.getMessage();
+        if (message != null && message.startsWith("Page offset exceeds")) {
+            return problem(HttpStatus.BAD_REQUEST, "Bad Request", "page is too large");
+        }
+        throw e;
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
